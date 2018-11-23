@@ -13,7 +13,7 @@ using namespace std;
 /**
  * The file (descriptor) in which the results of the simulation wil be stored.
  */
-ofstream myFile;
+ofstream myFile, nodes;
 /**
  * A set that contains all the actual played games, without symetries.
  */
@@ -59,7 +59,7 @@ bool is_won( string const game ) {
  * @return      True if an already played symetry has been found, False otherwise.
  */
 string is_played( string const game ) {
-	string symetric =	game;
+	string symetric = game;
 	char tmp;
 	int it, jt;
 
@@ -78,6 +78,7 @@ string is_played( string const game ) {
 	}
 
 	// Vertical symetries
+	symetric = game; // Shouldn't be necessary, as the rotations already lead to the case where we are back to the original game
 	for( int i = 0; i < 9; i += 3 ) {
 		tmp = symetric[i];
 		symetric[i] = symetric[i + 2];
@@ -88,10 +89,37 @@ string is_played( string const game ) {
 	}
 
 	// Horizontal symetries
+	symetric = game;
 	for( int i = 0; i < 3; ++i ) {
 		tmp = symetric[i];
 		symetric[i] = symetric[i + 6];
 		symetric[i + 6] = tmp;
+	}
+	if( playedGames.find(symetric) != playedGames.end() ) {
+		return *(playedGames.find(symetric));
+	}
+
+	// First diagonal
+	symetric = game;
+	for( int i = 0; i < 3; ++i ) {
+		for( int j = 0; j < i; ++j ) {
+			tmp = symetric[i + 3 * j];
+			symetric[i + 3 * j] = symetric[ j + 3 * i ];
+			symetric[ j + 3 * i ] = tmp;
+		}
+	}
+	if( playedGames.find(symetric) != playedGames.end() ) {
+		return *(playedGames.find(symetric));
+	}
+
+	// Second diagonal
+	symetric = game;
+	for( int j = 0; j < 3; ++j ) {
+		for( int i = 0; i < 2 - j; ++i ) {
+			tmp = symetric[i + 3 * j];
+			symetric[i + 3 * j] = symetric[ (2 - j) + 3 * (2 - i) ];
+			symetric[ (2 - j) + 3 * (2 - i) ] = tmp;
+		}
 	}
 	if( playedGames.find(symetric) != playedGames.end() ) {
 		return *(playedGames.find(symetric));
@@ -113,15 +141,24 @@ void play( int turn, string game, int const p, char const c, char moves[9] ) {
 	bool isWon;
 	string isPlayed, toWrite;
 
-	if( p != -1 )
+	if( p != -1 ) {
 		game[p] = c;
+	}
+
 	isWon = is_won(game);
 	isPlayed = is_played(game);
-	toWrite = ((isWon)? (char)(c-32): '_') + ((isPlayed == "")? game: isPlayed);
-	for( int j = 0; j < turn; ++j ) myFile << "\t";
+	toWrite = ((isWon)? (char)(c-32): ((turn >= 9)? 'C': '_')) + ((isPlayed == "")? game: isPlayed);
+
+	for( int j = 0; j < turn; ++j ) {
+		myFile << "\t";
+	}
 	myFile << ((turn != 0)? "|-": "") << toWrite;
-	if(isPlayed == "") playedGames.insert(game);
-	if( !isWon ) {
+
+	if(isPlayed == "") {
+		playedGames.insert(game);
+	}
+
+	if( turn < 9 && !isWon ) {
 		for( int i = 0; i < 9; ++i ) {
 			if( moves[i] != -1 ) {
 				moves[i] = -1;
@@ -152,15 +189,20 @@ int main( void ) {
 					};
 	int XWinningNodes = 0,
 		OWinningNodes = 0,
-		unwiningNodes = 0;
+		unwiningNodes = 0,
+		twoPlaysGames = 0;
 
-	myFile.open( "example.txt" );
+	// Playing the games
+	myFile.open( "graph.txt" );
 	play( 0, game, -1, 'o', moves );
 	myFile.close();
 
+	// Some statistics
 	cout << "Number of nodes: " << playedGames.size() << endl;
-	cout << "### Number of winning nodes ###\n";
+	cout << "### Number of winning (X and O) and unwinning (U) nodes ###\n";
+	nodes.open( "nodes.txt" );
 	for( set<string>::iterator it = playedGames.begin(); it != playedGames.end(); ++it ) {
+		nodes << *it;
 		if( is_won(*it) ) {
 			if( count( (*it).begin(), (*it).end(), '.' ) % 2 == 0 ) {
 				++XWinningNodes;
@@ -171,6 +213,7 @@ int main( void ) {
 			++unwiningNodes;
 		}
 	}
+	nodes.close();
 	cout << "\tX: " << XWinningNodes << endl << "\tO: " << OWinningNodes << endl << "\tU: " << unwiningNodes << endl;
 
 	return 0;
