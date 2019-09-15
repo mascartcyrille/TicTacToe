@@ -1,4 +1,16 @@
+##### Menace Nim #####
+## Simulation of a Menace-kind of machine learning algorithm applied to the game of Nim.
+## authors: c.mascart (mascart@i3s.unice.fr)
+######################
+
 rm(list=ls())
+
+## Functions
+# Human
+RandomPlay <- function() {
+  ball <- sample(x = 1:min(3, Sticks-1), size = 1)
+  return(ball)
+}
 
 PerfectPlay <- function() {
   ball <- (Sticks  - 1) %% 4
@@ -9,11 +21,7 @@ PerfectPlay <- function() {
   }
 }
 
-RandomPlay <- function() {
-  ball <- sample(x = 1:min(3, Sticks-1), size = 1)
-  return(ball)
-}
-
+# Machine
 MachinePlay <- function() {
   ballsInBox <- sum(unlist(Boxes[[Sticks]]))
   U <- runif(1)
@@ -21,32 +29,39 @@ MachinePlay <- function() {
   return(ball)
 }
 
-RandomFirst <- T
-NbrGames <- 25
-MaxSticks <- 16
-Reward <- 1
-Punishment <- -2
+## Parameters
+# Players
+vsPerfect <- T
+MachineFirst <- T
+NbrGames <- 1000
+# Setup
+MaxSticks <- 11
+Reward <- 3
+Punishment <- -3
+# Machine
 History <- c()
 ballsUsed <- c()
 Boxes <- lapply(1:MaxSticks, function(x) {
   if(x == 1) {
     list()
   } else if(x == 2) {
-    list(one=10)
+    list(one=3)
   } else if(x == 3) {
-    list(one = 10, two = 10)
+    list(one = 3, two = 3)
   } else {
-    list(one = 10, two = 10, three = 10)
+    list(one = 3, two = 3, three = 3)
   }
 })
+# Plotting
+bin <- 100
 
-# Learning
-if(RandomFirst) {
-  First <- RandomPlay
-  Second <- MachinePlay
-} else {
+## Learning
+if(MachineFirst) {
   First <- MachinePlay
-  Second <- RandomPlay
+  Second <- ifelse(vsPerfect, PerfectPlay, RandomPlay)
+} else {
+  First <- ifelse(vsPerfect, PerfectPlay, RandomPlay)
+  Second <- MachinePlay
 }
 for(games in 1:NbrGames) {
   # Game
@@ -54,73 +69,76 @@ for(games in 1:NbrGames) {
   ballsUsed <- c()
   while(T) {
     # Player 1
-    MachineTurn <- !RandomFirst
+    MachineTurn <- MachineFirst
     Result <- First()
     if(is.na(Result)) {
-      machineWon <- !RandomFirst
+      machineWon <- MachineFirst
       break
     } else {
       ballsUsed <- c(ballsUsed, Sticks, Result)
       Sticks <- Sticks - Result
       if(Sticks == 1) {
-        machineWon <- !RandomFirst
+        machineWon <- MachineFirst
         break
       }
     }
     
     # Player 2
-    MachineTurn <- RandomFirst
+    MachineTurn <- !MachineFirst
     Result <- Second()
     if(is.na(Result)) {
-      machineWon <- !RandomFirst
+      machineWon <- !MachineFirst
       break
     } else {
       ballsUsed <- c(ballsUsed, Sticks, Result)
       Sticks <- Sticks - Result
       if(Sticks == 1) {
-        machineWon <- RandomFirst
+        machineWon <- !MachineFirst
         break
       }
     }
   }
   History <- c(History, ifelse(machineWon, 1, -1))
   if(length(ballsUsed)>0) {
-    for(i in seq.int(ifelse(RandomFirst, 3, 1), length(ballsUsed), 4)) {
+    for(i in seq.int(ifelse(MachineFirst, 1, 3), length(ballsUsed), 4)) {
       if(ballsUsed[i + 1] == 1) {
         Boxes[[ballsUsed[i]]]$one <- Boxes[[ballsUsed[i]]]$one + ifelse(machineWon, Reward, Punishment)
-        if(Boxes[[ballsUsed[i]]]$one < 0) Boxes[[ballsUsed[i]]]$one <- 0
+        if(Boxes[[ballsUsed[i]]]$one < 1) Boxes[[ballsUsed[i]]]$one <- 1
       } else if(ballsUsed[i + 1] == 2) {
         Boxes[[ballsUsed[i]]]$two <- Boxes[[ballsUsed[i]]]$two + ifelse(machineWon, Reward, Punishment)
-        if(Boxes[[ballsUsed[i]]]$two <= 0) Boxes[[ballsUsed[i]]]$two <- 0
+        if(Boxes[[ballsUsed[i]]]$two <= 1) Boxes[[ballsUsed[i]]]$two <- 1
       } else {
         Boxes[[ballsUsed[i]]]$three <- Boxes[[ballsUsed[i]]]$three + ifelse(machineWon, Reward, Punishment)
-        if(Boxes[[ballsUsed[i]]]$three <= 0) Boxes[[ballsUsed[i]]]$three <- 0
+        if(Boxes[[ballsUsed[i]]]$three <= 1) Boxes[[ballsUsed[i]]]$three <- 1
       }
     }
   }
 }
 
+## Displaying results
+# Winning count: the number of games won minus the number of games lost
 png("Winning_count.png")
 col <- sapply(History, function(x){ifelse(x == 1, "green", ifelse(x == -1, "red", "blue"))})
-plot(cumsum(History), col=col, type = "h", xlab = "Number of games played", ylab = "#Won - #Lost", main = "Winning count (since beginning)")
+plot(cumsum(History)
+     , col=col, type = "h"
+     , xlab = "Number of games played", ylab = "#Won - #Lost", main = "Winning count (since beginning)")
 dev.off()
 
 png("Winning_rate_begining.png")
-plot(x = 1:length(History), y = cumsum((History+1)%/%2)/1:length(History), col = col, xlab = "Number of games played", ylab = "#Won/#Lost", main = "Winning rate (since beginning)")
+plot(x = 1:NbrGames, y = cumsum((History+1)%/%2)/1:NbrGames
+     , ylim = c(0.0, 1.0)
+     , col = col, xlab = "Number of games played", ylab = "#Won/#Games", main = "Winning rate (since beginning)")
 lines(c(0,length(History)), c(0.5, 0.5), type="l", col="red")
 dev.off()
 
-bin <- 4
-l <- seq(1, length(History)+1, bin)
 moving <- c()
-for(i in 1:(length(l)-1))
-  moving <- c(moving, sum((History[l[i]:(l[i+1]-1)]+1)%/%2)/(l[i+1]-l[i]))
+for(i in 1:(NbrGames-bin+1)) {
+  moving <- c(moving, sum((History[i:(i+bin-1)]+1)%/%2)/bin)
+}
 png("Winning_rate_bin.png")
-plot(x = 1:length(moving) * bin, y = moving, xlab = "Number of games played", ylab = "#Won/#Lost", main = paste("Winning rate (bin of ", bin, ")", sep = ""))
+plot(x = bin:NbrGames, y = moving
+     , ylim = c(0.0, 1.0)
+     , xlab = "Number of games played", ylab = "#Won/#Lost", main = paste("Winning rate (bin of ", bin, ")", sep = "")
+     , type = "l")
 lines(c(0,length(moving)*bin), c(0.5, 0.5), type="l", col="red")
 dev.off()
-
-matrix(Boxes, nrow = 3, ncol = length(Boxes))
-for(b in Boxes) {
-  print(b)
-}
